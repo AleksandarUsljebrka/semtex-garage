@@ -1,0 +1,127 @@
+/* ==========================================================================
+   Hero reveal: headlights switching on, played once on page load.
+
+   The photo is never changed or moved. All light lives in separate layers
+   (light on black, see tools/build_hero_lights.py) that are screened on top
+   of it, so wherever a layer is dark the photo shows through untouched.
+
+   Sequence (like the real car):
+     1. daytime running lights sweep on, from the grille outwards
+     2. low beams: projectors light up
+     3. light lands on the wet floor, a faint beam in the air
+
+   .hero-reveal[data-hero-reveal] > .hero-reveal__stage
+       .hero-reveal__photo
+       .hero-reveal__light--spill / --haze / --drl-l / --drl-r / --beam
+
+   States (classes from hero-reveal.js):
+     (none, JS on)  lights off
+     .is-playing    sequence runs
+     .is-done       lights on, static (also prefers-reduced-motion)
+   Without JS the lights are simply on.
+   ========================================================================== */
+
+.hero-reveal {
+  --hr-start: 600ms;            /* dark hold */
+  --hr-sweep: 520ms;            /* DRL sweep (movement on screen: ease-in-out) */
+  --hr-beam-at: 1250ms;         /* low beams switch on */
+
+  /* where the car body starts inside the photo (fraction of stage width) */
+  --hr-car-left: .42;
+
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--c-hero, #060606);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.hero-reveal__stage {
+  position: relative;
+  flex: none;
+  width: var(--hr-stage-w, 100%);
+  aspect-ratio: 1648 / 608;
+  isolation: isolate;
+  /* soft edges so no rectangle shows against the hero background */
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 0, #000 var(--hr-mask-left, 16%)),
+    linear-gradient(to bottom, transparent 0, #000 var(--hr-mask-top, 14%), #000 calc(100% - var(--hr-mask-bottom, 12%)), transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent 0, #000 var(--hr-mask-left, 16%)),
+    linear-gradient(to bottom, transparent 0, #000 var(--hr-mask-top, 14%), #000 calc(100% - var(--hr-mask-bottom, 12%)), transparent 100%);
+  mask-composite: intersect;
+}
+
+.hero-reveal__photo,
+.hero-reveal__photo img,
+.hero-reveal__light {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+}
+
+.hero-reveal__light { mix-blend-mode: screen; }
+
+/* --- lights off: JS present, sequence not started ------------------------- */
+.js .hero-reveal:not(.is-playing):not(.is-done) .hero-reveal__light { opacity: 0; }
+
+/* --- sequence -------------------------------------------------------------- */
+/* low beams: LEDs come up fast, the light they throw follows a moment later.
+   Light coming on = entering: strong ease-out. Opacity only, so this also plays
+   with reduced motion (gentler, not none). */
+.hero-reveal.is-playing .hero-reveal__light--beam  { animation: hr-fade 380ms var(--ease-out, ease-out) var(--hr-beam-at) both; }
+.hero-reveal.is-playing .hero-reveal__light--spill { animation: hr-fade 650ms var(--ease-out, ease-out) calc(var(--hr-beam-at) + 60ms) both; }
+.hero-reveal.is-playing .hero-reveal__light--haze  { animation: hr-fade 1400ms var(--ease-out, ease-out) calc(var(--hr-beam-at) + 120ms) both; }
+
+/* DRL, full motion: a soft edge travels from the grille side to the outer side of each lamp.
+   The mask is twice the stage width; its edge sits at x = W * (1 - position). */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-reveal.is-playing .hero-reveal__light--drl-r {
+    -webkit-mask-image: linear-gradient(to right, #000 48.5%, transparent 50%);
+    mask-image: linear-gradient(to right, #000 48.5%, transparent 50%);
+    -webkit-mask-size: 200% 100%;
+    mask-size: 200% 100%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    animation: hr-sweep-r var(--hr-sweep) var(--ease-in-out, ease-in-out) var(--hr-start) both;
+  }
+  .hero-reveal.is-playing .hero-reveal__light--drl-l {
+    -webkit-mask-image: linear-gradient(to left, #000 48.5%, transparent 50%);
+    mask-image: linear-gradient(to left, #000 48.5%, transparent 50%);
+    -webkit-mask-size: 200% 100%;
+    mask-size: 200% 100%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    animation: hr-sweep-l var(--hr-sweep) var(--ease-in-out, ease-in-out) var(--hr-start) both;
+  }
+}
+/* DRL, reduced motion: same moment, no travelling edge, just a soft fade */
+@media (prefers-reduced-motion: reduce) {
+  .hero-reveal.is-playing .hero-reveal__light--drl-l,
+  .hero-reveal.is-playing .hero-reveal__light--drl-r { animation: hr-fade 500ms ease var(--hr-start) both; }
+}
+
+/* right lamp: edge from 64% to 77% of the stage, then fully open */
+@keyframes hr-sweep-r {
+  from { -webkit-mask-position: 36% 0; mask-position: 36% 0; }
+  88%  { -webkit-mask-position: 22% 0; mask-position: 22% 0; }
+  to   { -webkit-mask-position: 0 0;   mask-position: 0 0; }
+}
+/* left lamp: edge from 48.5% to 42% of the stage, then fully open */
+@keyframes hr-sweep-l {
+  from { -webkit-mask-position: 51.5% 0; mask-position: 51.5% 0; }
+  88%  { -webkit-mask-position: 58% 0;   mask-position: 58% 0; }
+  to   { -webkit-mask-position: 100% 0;  mask-position: 100% 0; }
+}
+@keyframes hr-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
